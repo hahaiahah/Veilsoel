@@ -1,11 +1,13 @@
 // ============================================
-// بوت whitehat9995# - النسخة الأسطورية النهائية
+// بوت whitehat9995# - النسخة الاحترافية النهائية
 // ============================================
 
-const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType, ActivityType, Collection } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
 const ms = require('ms');
+const fs = require('fs');
+const path = require('path');
 
 const client = new Client({
     intents: [
@@ -20,22 +22,46 @@ const client = new Client({
 // ============ الإعدادات ============
 const PREFIX = "-";
 const JAIL_ROLE_NAME = "مسجون";
+const MEMBER_ROLE_NAME = "Member";
 const WELCOME_CHANNEL_ID = "1481786619303297205";
 const LEAVE_CHANNEL_ID = "1481786887680299088";
 const NEWS_CHANNEL_ID = "1481800500721746135";
 const DECORATIVE_LINE = "https://cdn.discordapp.com/attachments/1481775956300402761/1481901028507914332/line.png";
 const NEWS_API_KEY = "b3371fd75d11409ebb3b795d95f0ce8a";
-const SUPPORT_ROLE_ID = "123456789012345678"; // ضع هنا آيدي رتبة الدعم الفني
+const SUPPORT_ROLE_ID = "123456789012345678"; // غيره إلى آيدي رتبة الدعم
 
-// التسلسل الهرمي للرتب
+// هرم الصلاحيات
 const roleHierarchy = [
     "SOEL 🔱", "Central Bank.", "FlixerX", "Developer 👨‍💻", "Owner", "Co-Owner",
     "ابو محمد", "Head Moderator", "Moderator", "Admin", "Wicks", "Support🛠️",
     "Helper", "بكّمي", "Member", "سجن", "مسجون"
 ];
 
-// تخزين السجن
-const jailData = new Map();
+// قاعدة بيانات بسيطة
+const DB_PATH = path.join(__dirname, 'database.json');
+let database = { jail: {}, xp: {}, points: {} };
+if (fs.existsSync(DB_PATH)) {
+    try { database = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); } catch(e) { console.error(e); }
+}
+function saveDB() {
+    fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2), 'utf8');
+}
+
+// متغيرات اللعبة
+let gameActive = false;
+let gameSentence = '';
+let gameChannel = null;
+let gameTimeout = null;
+const sentences = [
+    "البوت الأسطوري",
+    "القرصنة الأخلاقية",
+    "حماية المجتمع",
+    "سرعة بديهة",
+    "تحدي الكتابة",
+    "whitehat9995",
+    "SOEL 🔱",
+    "أنا الأسرع"
+];
 
 // ============ دوال مساعدة ============
 function getHighestRole(member) {
@@ -56,10 +82,28 @@ function hasPermission(member, target) {
 }
 
 async function sendDM(user, content) {
-    try { await user.send(content); } catch (e) { /* لا يمكن إرسال */ }
+    try { await user.send(content); } catch (e) { /* لا يمكن */ }
 }
 
-// ============ البوت يعمل ============
+function getXP(guildId, userId) {
+    if (!database.xp[guildId]) database.xp[guildId] = {};
+    if (!database.xp[guildId][userId]) database.xp[guildId][userId] = { xp: 0, level: 0 };
+    return database.xp[guildId][userId];
+}
+
+function addXP(guildId, userId, amount) {
+    const data = getXP(guildId, userId);
+    data.xp += amount;
+    const needed = (data.level + 1) * 100;
+    if (data.xp >= needed) {
+        data.xp -= needed;
+        data.level += 1;
+        return true; // level up
+    }
+    return false;
+}
+
+// ============ البوت جاهز ============
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} يعمل`);
     client.user.setActivity("-اوامر | نظام متكامل", { type: ActivityType.Watching });
@@ -83,27 +127,40 @@ client.once('ready', () => {
     });
 });
 
-// ============ الترحيب والمغادرة (فخمين وبسيطين) ============
-client.on('guildMemberAdd', member => {
+// ============ الترحيب والمغادرة (النموذج الجديد) ============
+client.on('guildMemberAdd', async member => {
     const channel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
     if (!channel) return;
+
+    // إعطاء رتبة Member تلقائياً
+    const memberRole = member.guild.roles.cache.find(r => r.name === MEMBER_ROLE_NAME);
+    if (memberRole) {
+        try { await member.roles.add(memberRole); } catch(e) {}
+    }
+
     const embed = new EmbedBuilder()
-        .setAuthor({ name: member.user.username, iconURL: member.user.displayAvatarURL() })
-        .setTitle('🌟 مرحباً بك في رحابنا')
-        .setDescription(`حللت أهلاً ووطئت سهلاً، يا **${member.user.username}**.\nأنت العضو رقم **${member.guild.memberCount}** في السيرفر.\nأسأل الله أن تطيب لك الإقامة بيننا.`)
+        .setTitle(`🎭 أهلاً بك في ${member.guild.name}`)
+        .setDescription(`حيّاك الله يا ${member.user}، نورتنا بانضمامك!\nأنت العضو رقم: **${member.guild.memberCount}**\nتاريخ الانضمام: <t:${Math.floor(Date.now()/1000)}:D>`)
         .setImage(member.user.displayAvatarURL({ dynamic: true, size: 1024 }))
         .setColor(0x00ff00)
         .setFooter({ text: 'whitehat9995#' });
     channel.send({ embeds: [embed] });
 });
 
-client.on('guildMemberRemove', member => {
+client.on('guildMemberRemove', async member => {
     const channel = member.guild.channels.cache.get(LEAVE_CHANNEL_ID);
     if (!channel) return;
+
+    const joinedAt = member.joinedTimestamp;
+    const now = Date.now();
+    const durationMs = now - joinedAt;
+    const days = Math.floor(durationMs / 86400000);
+    const hours = Math.floor((durationMs % 86400000) / 3600000);
+    const stayStr = `${days} يوم و ${hours} ساعة`;
+
     const embed = new EmbedBuilder()
-        .setAuthor({ name: member.user.username, iconURL: member.user.displayAvatarURL() })
-        .setTitle('💔 وداعاً')
-        .setDescription(`غادرنا **${member.user.username}**، سائلين المولى أن يوفقه أينما حلّ.\nعدد المتبقين: **${member.guild.memberCount}**`)
+        .setTitle(`💨 وداعاً من ${member.guild.name}`)
+        .setDescription(`يؤسفنا رحيلك يا ${member.user}..\nعدد الأعضاء الحالي: **${member.guild.memberCount}**\nمدة بقائك معنا: ${stayStr}\nنأمل أن تكون قد استمتعت بوقتك، وأبواب السيرفر ستبقى مفتوحة لك دائماً.`)
         .setImage(member.user.displayAvatarURL({ dynamic: true, size: 1024 }))
         .setColor(0xff0000)
         .setFooter({ text: 'whitehat9995#' });
@@ -112,12 +169,27 @@ client.on('guildMemberRemove', member => {
 
 // ============ معالج الأوامر ============
 client.on('messageCreate', async message => {
-    if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+    if (message.author.bot) return;
+
+    // نظام XP
+    if (!message.content.startsWith(PREFIX)) {
+        const leveledUp = addXP(message.guild.id, message.author.id, Math.floor(Math.random() * 10) + 5);
+        if (leveledUp) {
+            const data = getXP(message.guild.id, message.author.id);
+            const embed = new EmbedBuilder()
+                .setTitle('🎉 تهنئة!')
+                .setDescription(`${message.author}، لقد ارتقيت إلى المستوى **${data.level}**!`)
+                .setColor(0x00ff00);
+            message.channel.send({ embeds: [embed] });
+        }
+        saveDB();
+        return;
+    }
 
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // دالة إرسال خاص مع صورة السيرفر
+    // دالة إرسال عقوبة بالخاص
     const sendPunishmentDM = async (user, action, reason, duration) => {
         const guildIcon = message.guild.iconURL({ dynamic: true, size: 1024 });
         let dmContent = `🛑 **${action}** من سيرفر **${message.guild.name}**`;
@@ -141,10 +213,9 @@ client.on('messageCreate', async message => {
                     .addOptions([
                         { label: '🛡️ الإشراف', value: 'moderation' },
                         { label: '😈 الاستفزاز', value: 'fun' },
-                        { label: '🎮 الألعاب', value: 'games' },
+                        { label: '🎮 التحدي', value: 'game' },
                         { label: '🕌 الإسلامية', value: 'islamic' },
                         { label: '👤 العامة', value: 'general' },
-                        { label: '💰 الاقتصاد', value: 'economy' },
                         { label: '🎫 التذاكر', value: 'tickets' }
                     ])
             );
@@ -186,18 +257,33 @@ client.on('messageCreate', async message => {
         message.channel.send({ embeds: [embed] });
     }
     else if (command === 'تحقق') {
-        const member = message.mentions.members.first() || message.member;
-        const embed = new EmbedBuilder()
-            .setTitle(`🕵️ تقرير ${member.user.username}`)
-            .setThumbnail(member.user.displayAvatarURL())
-            .addFields(
-                { name: '🆔 ID', value: member.user.id, inline: true },
-                { name: '📅 تاريخ الحساب', value: `<t:${Math.floor(member.user.createdTimestamp/1000)}:D>`, inline: true },
-                { name: '📥 تاريخ الانضمام', value: `<t:${Math.floor(member.joinedTimestamp/1000)}:D>`, inline: true },
-                { name: '🎭 أعلى رتبة', value: `${member.roles.highest}`, inline: true }
-            )
-            .setColor(0x00ff00);
-        message.channel.send({ embeds: [embed] });
+        if (args[0] === 'انشاء' || args[0] === 'create') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) return message.reply('❌ لا تملك صلاحية');
+            const row = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder().setCustomId('verify').setLabel('✅ تحقق').setStyle(ButtonStyle.Success)
+                );
+            const embed = new EmbedBuilder()
+                .setTitle('🔒 نظام التحقق')
+                .setDescription('اضغط الزر أدناه لتأكيد هويتك والحصول على رتبة Member ورؤية جميع الرومات.')
+                .setColor(0x00ff00);
+            message.channel.send({ embeds: [embed], components: [row] });
+            return;
+        } else {
+            // أمر تحقق عادي للعضو
+            const member = message.mentions.members.first() || message.member;
+            const embed = new EmbedBuilder()
+                .setTitle(`🕵️ تقرير ${member.user.username}`)
+                .setThumbnail(member.user.displayAvatarURL())
+                .addFields(
+                    { name: '🆔 ID', value: member.user.id, inline: true },
+                    { name: '📅 تاريخ الحساب', value: `<t:${Math.floor(member.user.createdTimestamp/1000)}:D>`, inline: true },
+                    { name: '📥 تاريخ الانضمام', value: `<t:${Math.floor(member.joinedTimestamp/1000)}:D>`, inline: true },
+                    { name: '🎭 أعلى رتبة', value: `${member.roles.highest}`, inline: true }
+                )
+                .setColor(0x00ff00);
+            message.channel.send({ embeds: [embed] });
+        }
     }
     else if (command === 'تايم') {
         message.channel.send(`⏰ ${new Date().toLocaleTimeString('ar-SA')}`);
@@ -224,10 +310,21 @@ client.on('messageCreate', async message => {
             .setColor(0x00ff00);
         message.channel.send({ embeds: [embed] });
     }
-    else if (command === 'رتبة') {
+    else if (command === 'رتبة' || command === 'رول') {
         const member = message.mentions.members.first() || message.member;
         const roles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r.name).join(', ') || 'لا يوجد';
         message.channel.send(`🎭 ${member.user.username}: ${roles}`);
+    }
+    else if (command === 'رول' && args[0] === 'اعطاء') {
+        // اختصار إعطاء رتبة: -رول اعطاء @شخص اسم_الرتبة
+        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply('❌ لا تملك صلاحية');
+        const member = message.mentions.members.first();
+        const roleName = args.slice(1).join(' ');
+        if (!member || !roleName) return message.reply('استخدم: -رول اعطاء @شخص اسم_الرتبة');
+        const role = message.guild.roles.cache.find(r => r.name === roleName);
+        if (!role) return message.reply('الرتبة غير موجودة');
+        await member.roles.add(role);
+        message.channel.send(`✅ أعطيت ${member.user} رتبة ${role.name}`);
     }
     else if (command === 'احصائيات') {
         const embed = new EmbedBuilder()
@@ -240,7 +337,7 @@ client.on('messageCreate', async message => {
             .setColor(0x00ff00);
         message.channel.send({ embeds: [embed] });
     }
-    // ============ إشراف أساسي ============
+    // ============ إشراف ============
     else if (['كتم', 'اص', 'ميوت'].includes(command)) {
         const member = message.mentions.members.first();
         if (!member) return message.reply('منشن شخص.');
@@ -279,19 +376,23 @@ client.on('messageCreate', async message => {
         const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
         if (!jailRole) return message.reply('دور السجن غير موجود');
         const memberRoles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r.id);
-        jailData.set(`${message.guild.id}-${member.id}`, memberRoles);
+        const key = `${message.guild.id}-${member.id}`;
+        database.jail[key] = memberRoles;
+        saveDB();
         await member.roles.set([jailRole]);
         message.channel.send(`🔒 ${member.user} أُودع السجن`);
     }
     else if (command === 'فك_سجن' || command === 'عفو') {
         const member = message.mentions.members.first();
         if (!member) return message.reply('منشن شخص.');
-        const saved = jailData.get(`${message.guild.id}-${member.id}`);
+        const key = `${message.guild.id}-${member.id}`;
+        const saved = database.jail[key];
         if (!saved) return message.reply('ليس مسجوناً');
         const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
         await member.roles.remove(jailRole);
         await member.roles.add(saved);
-        jailData.delete(`${message.guild.id}-${member.id}`);
+        delete database.jail[key];
+        saveDB();
         message.channel.send(`🔓 ${member.user} خرج من السجن ورُدّت إليه رتبه`);
     }
     else if (command === 'مسح') {
@@ -319,16 +420,15 @@ client.on('messageCreate', async message => {
         message.channel.send(`⚠️ ${member.user} تلقيت تحذيراً${reason ? ' بسبب: '+reason : ''}`);
         sendPunishmentDM(member.user, 'تحذير', reason);
     }
-    // ============ أوامر إشرافية جديدة ============
     else if (command === 'ابلع_رجلي') {
         const member = message.mentions.members.first();
         if (!member) return message.reply('منشن شخص.');
         if (!hasPermission(message.member, member)) return message.reply('❌ لا تملك صلاحية.');
-        const duration = args[1] ? ms(args[1]) : 600000; // افتراضي 10 دقائق
+        const duration = args[1] ? ms(args[1]) : 600000;
         const reason = args.slice(2).join(' ') || 'أمر استفزازي';
         await member.timeout(duration, reason);
         message.channel.send(`🦵 ${member.user} ابتلع رجلي لمدة ${ms(duration, { long: true })}`);
-        sendPunishmentDM(member.user, 'إبلاع رجلي 😂', reason, ms(duration, { long: true }));
+        sendPunishmentDM(member.user, 'إبلاع رجلي', reason, ms(duration, { long: true }));
     }
     else if (command === 'تهدئة') {
         const member = message.mentions.members.first();
@@ -352,14 +452,15 @@ client.on('messageCreate', async message => {
         await member.timeout(null);
         const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
         if (jailRole && member.roles.cache.has(jailRole.id)) {
-            const saved = jailData.get(`${message.guild.id}-${member.id}`);
+            const key = `${message.guild.id}-${member.id}`;
+            const saved = database.jail[key];
             if (saved) {
                 await member.roles.remove(jailRole);
                 await member.roles.add(saved);
-                jailData.delete(`${message.guild.id}-${member.id}`);
+                delete database.jail[key];
+                saveDB();
             }
         }
-        // يمكن فك التقييد من جميع الرومات لكن نكتفي بالميوت والسجن
         message.channel.send(`✨ ${member.user} رُفعت عنه جميع العقوبات`);
     }
     else if (command === 'تنظيف') {
@@ -400,26 +501,59 @@ client.on('messageCreate', async message => {
             message.channel.send(`${target.user} تعال ${command} مني 😂`);
         }
     }
-    // ============ ألعاب ============
-    else if (['حجرة', 'ورقة', 'مقص'].includes(command)) {
-        const choices = ['حجرة', 'ورقة', 'مقص'];
-        const botChoice = choices[Math.floor(Math.random() * choices.length)];
-        message.reply(`✊✋✌️ البوت اختار: **${botChoice}**`);
+    // ============ تحديات وألعاب ============
+    else if (command === 'تحدي' || command === 'سرعة') {
+        if (gameActive) return message.reply('توجد لعبة نشطة بالفعل.');
+        gameActive = true;
+        gameChannel = message.channel;
+        const sentence = sentences[Math.floor(Math.random() * sentences.length)];
+        gameSentence = sentence;
+        const embed = new EmbedBuilder()
+            .setTitle('⚡ تحدّي السرعة!')
+            .setDescription(`**اكتب الجملة التالية بأسرع وقت:**\n\n\`${sentence}\``)
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
+        // مهلة 10 ثواني
+        gameTimeout = setTimeout(() => {
+            if (gameActive) {
+                gameActive = false;
+                gameChannel.send('⏰ انتهت اللعبة، لم يجب أحد في الوقت المحدد.');
+                gameChannel = null;
+            }
+        }, 10000);
     }
-    else if (command === 'تخمين') {
-        const guess = Math.floor(Math.random() * 10) + 1;
-        const userGuess = parseInt(args[0]);
-        if (!userGuess) return message.reply('خمن رقم بين 1 و 10');
-        message.reply(userGuess === guess ? '✅ أصبت!' : `❌ أخطأت! الرقم كان ${guess}`);
+    // لعبة الجملة: إذا تطابقت رسالة مع gameSentence
+    if (gameActive && message.channel.id === gameChannel?.id && message.content === gameSentence) {
+        clearTimeout(gameTimeout);
+        gameActive = false;
+        const winner = message.author;
+        // منح نقطة
+        const key = `${message.guild.id}-${winner.id}`;
+        if (!database.points[message.guild.id]) database.points[message.guild.id] = {};
+        database.points[message.guild.id][winner.id] = (database.points[message.guild.id][winner.id] || 0) + 1;
+        saveDB();
+        const points = database.points[message.guild.id][winner.id];
+        message.channel.send(`🎉 ${winner} فاز! لقد كتب الجملة أولاً. لديه الآن **${points}** نقطة.`);
+        gameChannel = null;
+        return;
     }
-    else if (command === 'عملة') {
-        message.reply(`🪙 ${Math.random() < 0.5 ? 'ملك' : 'كتابة'}`);
+    // ============ نقاط ولفل ============
+    if (command === 'نقاط') {
+        const member = message.mentions.members.first() || message.member;
+        const key = `${message.guild.id}-${member.id}`;
+        const points = database.points?.[message.guild.id]?.[member.id] || 0;
+        message.channel.send(`🏆 نقاط ${member.user}: **${points}**`);
     }
-    else if (command === 'نرد') {
-        message.reply(`🎲 ${Math.floor(Math.random() * 6) + 1}`);
-    }
-    else if (['اكس_او', 'سرعة_كتابة', 'شنق', 'تحدي'].includes(command)) {
-        message.reply('⏳ قيد التطوير');
+    else if (command === 'لفلي' || command === 'مستواي') {
+        const data = getXP(message.guild.id, message.author.id);
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 مستوى ${message.author.username}`)
+            .addFields(
+                { name: 'المستوى', value: `${data.level}`, inline: true },
+                { name: 'الخبرة', value: `${data.xp}/${(data.level+1)*100}`, inline: true }
+            )
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
     }
     // ============ إسلامية ============
     else if (command === 'قرآن') message.reply('📖 https://quran.com');
@@ -427,22 +561,7 @@ client.on('messageCreate', async message => {
     else if (command === 'اذكار') message.reply('📿 سبحان الله وبحمده، سبحان الله العظيم');
     else if (command === 'تسبيح') message.reply('📿 سبحان الله، الحمدلله، الله أكبر');
     else if (command === 'صلاة') message.reply('🕌 حان الآن وقت الصلاة');
-    // ============ اقتصاد ============
-    else if (command === 'فلوسي') message.reply('💰 رصيدك: 500 ريال (وهمي)');
-    else if (command === 'راتب') message.reply('💸 استلمت راتبك اليومي: 100 ريال');
-    else if (command === 'تحويل') {
-        const user = message.mentions.users.first();
-        const amount = parseInt(args[1]);
-        if (!user || !amount) return message.reply('-تحويل @شخص المبلغ');
-        message.reply(`💵 حولت ${amount} ريال إلى ${user.username}`);
-    }
-    else if (command === 'متجر') message.reply('🛒 المتجر: 1. كلمة مرور (1000) 2. رتبة مميزة (5000)');
-    else if (command === 'هدية') {
-        const user = message.mentions.users.first();
-        if (!user) return message.reply('منشن شخص تهديه');
-        message.reply(`🎁 أهديت ${user.username} 50 ريال`);
-    }
-    // ============ تذاكر (لوحة الأوامر) ============
+    // ============ تذاكر ============
     else if (command === 'تذكرة') {
         const embed = new EmbedBuilder()
             .setTitle('🎫 نظام التذاكر')
@@ -460,29 +579,25 @@ client.on('messageCreate', async message => {
 
 // ============ تفاعلات الأزرار والقوائم ============
 client.on('interactionCreate', async interaction => {
-    // قائمة المساعدة
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'help_menu') {
             const value = interaction.values[0];
             let embed;
             switch (value) {
                 case 'moderation':
-                    embed = new EmbedBuilder().setTitle('🛡️ الإشراف').setDescription('كتم, اص, تكلم, انبح, طرد, تفو, باند, حظر, سجن, فك_سجن, مسح, لوك, انلوك, تحذير, ابلع_رجلي, تهدئة, تقييد, فك_الكل, تنظيف, قول, عفو').setColor(0x00ff00);
+                    embed = new EmbedBuilder().setTitle('🛡️ الإشراف').setDescription('كتم, اص, تكلم, انبح, طرد, تفو, باند, حظر, سجن, فك_سجن, عفو, مسح, لوك, انلوك, تحذير, ابلع_رجلي, تهدئة, تقييد, فك_الكل, تنظيف, قول, رول').setColor(0x00ff00);
                     break;
                 case 'fun':
                     embed = new EmbedBuilder().setTitle('😈 الاستفزاز').setDescription('انقلع, خرس, اخرس, سحب_عليه, انفجر, امص, كمخ, صفعة, بصق').setColor(0x00ff00);
                     break;
-                case 'games':
-                    embed = new EmbedBuilder().setTitle('🎮 الألعاب').setDescription('حجرة, ورقة, مقص, تخمين, عملة, نرد, اكس_او, سرعة_كتابة, شنق, تحدي').setColor(0x00ff00);
+                case 'game':
+                    embed = new EmbedBuilder().setTitle('🎮 التحدي').setDescription('تحدي (أو سرعة) لبدء لعبة كتابة سريعة، نقاط لعرض نقاطك، لفل لرؤية مستواك').setColor(0x00ff00);
                     break;
                 case 'islamic':
                     embed = new EmbedBuilder().setTitle('🕌 الإسلامية').setDescription('قرآن, حديث, اذكار, تسبيح, صلاة').setColor(0x00ff00);
                     break;
                 case 'general':
                     embed = new EmbedBuilder().setTitle('👤 العامة').setDescription('اوامر, بينج, سيرفر, اواتار, تحقق, تايم, طقس, يوزر, رتبة, احصائيات').setColor(0x00ff00);
-                    break;
-                case 'economy':
-                    embed = new EmbedBuilder().setTitle('💰 الاقتصاد').setDescription('فلوسي, راتب, تحويل, متجر, هدية').setColor(0x00ff00);
                     break;
                 case 'tickets':
                     embed = new EmbedBuilder().setTitle('🎫 التذاكر').setDescription('تذكرة (لفتح قائمة التذاكر)').setColor(0x00ff00);
@@ -491,9 +606,18 @@ client.on('interactionCreate', async interaction => {
             await interaction.update({ embeds: [embed], components: [interaction.message.components[0]] });
         }
     }
-    // أزرار التذاكر
     else if (interaction.isButton()) {
-        if (interaction.customId.startsWith('ticket_') && !interaction.customId.startsWith('ticket_close')) {
+        // زر التحقق
+        if (interaction.customId === 'verify') {
+            const member = interaction.member;
+            const memberRole = interaction.guild.roles.cache.find(r => r.name === MEMBER_ROLE_NAME);
+            if (!memberRole) return interaction.reply({ content: 'رتبة Member غير موجودة، تواصل مع الإدارة.', ephemeral: true });
+            if (member.roles.cache.has(memberRole.id)) return interaction.reply({ content: 'أنت محقق بالفعل.', ephemeral: true });
+            await member.roles.add(memberRole);
+            await interaction.reply({ content: '✅ تم التحقق بنجاح! يمكنك الآن رؤية جميع الرومات.', ephemeral: true });
+        }
+        // أزرار التذاكر
+        else if (interaction.customId.startsWith('ticket_') && !interaction.customId.startsWith('ticket_close')) {
             const type = interaction.customId.replace('ticket_', '');
             const guild = interaction.guild;
             const member = interaction.member;
