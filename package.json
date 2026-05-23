@@ -1,13 +1,14 @@
 {
-  "name": "whitehat9995-bot",
-  "version": "3.0.0",
-  "description": "بوت whitehat9995# الأسطوري - 50 أمر",
+  "name": "whitehat9995-bot-pro",
+  "version": "4.0.0",
+  "description": "بوت whitehat9995# الأسطوري - نظام متكامل",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
+    "quick.db": "^9.1.7",
     "axios": "^1.7.2",
     "node-cron": "^3.0.3",
     "ms": "^2.1.3"
