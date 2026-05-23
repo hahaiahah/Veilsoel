@@ -1,35 +1,34 @@
 // ============================================
-// بوت whitehat9995# - 50 أمر
-// جميع الأوامر تبدأ بـ "-"
+// بوت whitehat9995# - الإصدار الأسطوري
 // ============================================
 
-const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, Partials } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
 const ms = require('ms');
+const { QuickDB } = require('quick.db');
+const db = new QuickDB();
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildPresences
     ]
 });
 
 const PREFIX = "-";
 const JAIL_ROLE_NAME = "مسجون";
-const JAIL_CHANNEL_ID = "1483291016575586414"; // قناة السجن (اختصرنا)
+const JAIL_CHANNEL_ID = "1483291016575586414";
 const WELCOME_CHANNEL_ID = "1481786619303297205";
 const LEAVE_CHANNEL_ID = "1481786887680299088";
 const NEWS_CHANNEL_ID = "1481800500721746135";
 const DECORATIVE_LINE = "https://cdn.discordapp.com/attachments/1481775956300402761/1481901028507914332/line.png";
-const NEWS_API_KEY = "b3371fd75d11409ebb3b795d95f0ce8a"; // مفتاح الأخبار
+const NEWS_API_KEY = "b3371fd75d11409ebb3b795d95f0ce8a";
 
-// تخزين رتب السجن (في الذاكرة فقط)
-const jailData = new Map();
-
-// دالة فحص الصلاحيات حسب التسلسل
+// هرم الصلاحيات
 const roleHierarchy = [
     "SOEL 🔱", "Central Bank.", "FlixerX", "Developer 👨‍💻", "Owner", "Co-Owner",
     "ابو محمد", "Head Moderator", "Moderator", "Admin", "Wicks", "Support🛠️",
@@ -53,10 +52,10 @@ function hasPermission(member, target) {
     return roleHierarchy.indexOf(memberHighest.name) < roleHierarchy.indexOf(targetHighest.name);
 }
 
-// ============ تشغيل البوت ============
+// ============ البوت جاهز ============
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} يعمل`);
-    client.user.setActivity("-اوامر | للمساعدة", { type: 3 });
+    client.user.setActivity("-اوامر | نظام متكامل", { type: 3 });
 
     // مهمة الأخبار كل ساعتين
     cron.schedule('0 */2 * * *', async () => {
@@ -78,413 +77,372 @@ client.once('ready', () => {
     });
 });
 
-// ============ الترحيب والمغادرة ============
+// ============ الترحيب والمغادرة الأسطوري ============
 client.on('guildMemberAdd', member => {
     const channel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
     if (!channel) return;
     const embed = new EmbedBuilder()
-        .setTitle(`🌟 مرحباً ${member.user.username}`)
-        .setDescription(`أنت العضو رقم **${member.guild.memberCount}**`)
+        .setAuthor({ name: member.user.username, iconURL: member.user.displayAvatarURL() })
+        .setTitle('🌟 مرحباً بك في سيرفرنا العريق!')
+        .setDescription(`أهلاً وسهلاً ${member.user.username}، نورتنا بقدومك.\n\n🎉 أنت العضو رقم **${member.guild.memberCount}** في السيرفر.\n📅 انضممت في: <t:${Math.floor(Date.now()/1000)}:D>\n\nنتمنى لك وقتاً ممتعاً وتفاعلاً رائعاً.`)
         .setImage(DECORATIVE_LINE)
-        .setColor(0x00ff00);
-    channel.send({ embeds: [embed] });
+        .setColor(0x00ff00)
+        .setFooter({ text: 'whitehat9995#' });
+    channel.send({ content: `**مرحباً ${member.user}**`, embeds: [embed] });
 });
 
 client.on('guildMemberRemove', member => {
     const channel = member.guild.channels.cache.get(LEAVE_CHANNEL_ID);
     if (!channel) return;
     const embed = new EmbedBuilder()
-        .setTitle(`💔 ${member.user.username} غادر`)
-        .setDescription(`نتمنى له التوفيق. الأعضاء المتبقين: **${member.guild.memberCount}**`)
+        .setAuthor({ name: member.user.username, iconURL: member.user.displayAvatarURL() })
+        .setTitle('💔 وداعاً ...')
+        .setDescription(`**${member.user.username}** غادر السيرفر.\n\n📉 عدد الأعضاء المتبقين: **${member.guild.memberCount}**\n😢 نتمنى أن تعود إلينا يوماً.\nرافقتنا السلامة.`)
         .setImage(DECORATIVE_LINE)
-        .setColor(0xff0000);
+        .setColor(0xff0000)
+        .setFooter({ text: 'whitehat9995#' });
     channel.send({ embeds: [embed] });
 });
 
-// ============ معالج الأوامر ============
+// ============ معالج الأوامر العادية ============
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.content.startsWith(PREFIX)) return;
-
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // ----- دالة المساعدة -----
-    const sendHelp = () => {
-        const embed = new EmbedBuilder()
-            .setTitle('📜 قائمة أوامر whitehat9995#')
-            .setColor(0x00ff00)
-            .setDescription('كل الأوامر تبدأ بـ `-`')
-            .addFields(
-                { name: '🛡️ إشراف', value: 'كتم, اص, تكلم, انبح, طرد, تفو, باند, حظر, سجن, فك_سجن, مسح, لوك, انلوك, تحذير, ميوت' },
-                { name: '😈 استفزاز', value: 'انقلع, خرس, سحب_عليه, انفجر, امص, كمخ, صفعة, بصق, اخرس, انبح, تفو' },
-                { name: '🎮 ألعاب', value: 'حجرة, ورقة, مقص, تخمين, عملة, نرد, اكس_او, سرعة_كتابة, شنق, تحدي' },
-                { name: '🕌 إسلامية', value: 'قرآن, حديث, اذكار, تسبيح, صلاة' },
-                { name: '👤 عامة', value: 'اوامر, بينج, سيرفر, اواتار, تحقق, تايم, طقس, يوزر, رتبة, احصائيات' },
-                { name: '💰 اقتصاد', value: 'فلوسي, راتب, تحويل, متجر, هدية' },
-                { name: '🎫 تذاكر', value: 'تذكرة, مساعدة, بلاغ, تقرير, قريب' }
-            )
-            .setFooter({ text: 'whitehat9995# | SOEL © 2025' });
-        message.channel.send({ embeds: [embed] });
+    // دالة إرسال رسالة تحذير بالخاص
+    const sendDM = async (user, content) => {
+        try {
+            await user.send(content);
+        } catch (e) { /* لا يمكن إرسال خاص */ }
     };
 
+    // ============ قائمة الأوامر التفاعلية ============
+    if (command === 'اوامر' || command === 'help') {
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId('help_menu')
+                    .setPlaceholder('اختر القسم')
+                    .addOptions([
+                        { label: '🛡️ الإشراف', value: 'moderation' },
+                        { label: '😈 الاستفزاز', value: 'fun' },
+                        { label: '🎮 الألعاب', value: 'games' },
+                        { label: '🕌 الإسلامية', value: 'islamic' },
+                        { label: '👤 العامة', value: 'general' },
+                        { label: '💰 الاقتصاد', value: 'economy' },
+                        { label: '🎫 التذاكر', value: 'tickets' }
+                    ])
+            );
+
+        const embed = new EmbedBuilder()
+            .setTitle('📜 قائمة الأوامر')
+            .setDescription('**اختر القسم من القائمة أدناه**')
+            .setColor(0x00ff00)
+            .setFooter({ text: 'whitehat9995#' });
+
+        message.channel.send({ embeds: [embed], components: [row] });
+        return;
+    }
+
     // ============ أوامر عامة ============
-    switch (command) {
-        case 'اوامر':
-        case 'help':
-            return sendHelp();
-
-        case 'بينج':
-            const pingMsg = await message.channel.send('⏳ جاري الحساب...');
-            const ping = pingMsg.createdTimestamp - message.createdTimestamp;
-            pingMsg.edit({ content: `🏓 بونج! سرعة الاتصال: **${ping}ms**` });
-            break;
-
-        case 'سيرفر':
-            const guild = message.guild;
-            const serverEmbed = new EmbedBuilder()
-                .setTitle(`📊 ${guild.name}`)
-                .setThumbnail(guild.iconURL())
-                .addFields(
-                    { name: '👑 المالك', value: `<@${guild.ownerId}>`, inline: true },
-                    { name: '👥 الأعضاء', value: `${guild.memberCount}`, inline: true },
-                    { name: '💬 الرومات', value: `${guild.channels.cache.size}`, inline: true },
-                    { name: '📅 تاريخ الإنشاء', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true }
-                )
+    if (command === 'بينج') {
+        const pingMsg = await message.channel.send('⏳ جاري الحساب...');
+        const ping = pingMsg.createdTimestamp - message.createdTimestamp;
+        pingMsg.edit({ content: `🏓 بونج! سرعة الاتصال: **${ping}ms**` });
+    }
+    else if (command === 'سيرفر') {
+        const guild = message.guild;
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 ${guild.name}`)
+            .setThumbnail(guild.iconURL())
+            .addFields(
+                { name: '👑 المالك', value: `<@${guild.ownerId}>`, inline: true },
+                { name: '👥 الأعضاء', value: `${guild.memberCount}`, inline: true },
+                { name: '💬 الرومات', value: `${guild.channels.cache.size}`, inline: true },
+                { name: '📅 تاريخ الإنشاء', value: `<t:${Math.floor(guild.createdTimestamp/1000)}:D>`, inline: true }
+            )
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
+    }
+    else if (command === 'اواتار') {
+        const user = message.mentions.users.first() || message.author;
+        const embed = new EmbedBuilder()
+            .setTitle(`🖼️ ${user.username}`)
+            .setImage(user.displayAvatarURL({ dynamic: true, size: 1024 }))
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
+    }
+    else if (command === 'تحقق') {
+        const member = message.mentions.members.first() || message.member;
+        const embed = new EmbedBuilder()
+            .setTitle(`🕵️ تقرير ${member.user.username}`)
+            .setThumbnail(member.user.displayAvatarURL())
+            .addFields(
+                { name: '🆔 ID', value: member.user.id, inline: true },
+                { name: '📅 تاريخ الحساب', value: `<t:${Math.floor(member.user.createdTimestamp/1000)}:D>`, inline: true },
+                { name: '📥 تاريخ الانضمام', value: `<t:${Math.floor(member.joinedTimestamp/1000)}:D>`, inline: true },
+                { name: '🎭 أعلى رتبة', value: `${member.roles.highest}`, inline: true }
+            )
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
+    }
+    else if (command === 'تايم') {
+        message.channel.send(`⏰ ${new Date().toLocaleTimeString('ar-SA')}`);
+    }
+    else if (command === 'طقس') {
+        if (!args[0]) return message.reply('❌ اكتب اسم مدينة');
+        try {
+            const res = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${args[0]}&appid=YOUR_KEY&lang=ar&units=metric`);
+            const w = res.data;
+            const embed = new EmbedBuilder()
+                .setTitle(`🌤️ ${w.name}`)
+                .setDescription(w.weather[0].description)
+                .addFields({ name: '🌡️ الحرارة', value: `${w.main.temp}°C`, inline: true }, { name: '💧 الرطوبة', value: `${w.main.humidity}%`, inline: true })
                 .setColor(0x00ff00);
-            message.channel.send({ embeds: [serverEmbed] });
-            break;
-
-        case 'اواتار':
-            const user = message.mentions.users.first() || message.author;
-            const avatarEmbed = new EmbedBuilder()
-                .setTitle(`🖼️ صورة ${user.username}`)
-                .setImage(user.displayAvatarURL({ dynamic: true, size: 1024 }))
-                .setColor(0x00ff00);
-            message.channel.send({ embeds: [avatarEmbed] });
-            break;
-
-        case 'تحقق':
-            const memberCheck = message.mentions.members.first() || message.member;
-            const checkEmbed = new EmbedBuilder()
-                .setTitle(`🕵️ تقرير ${memberCheck.user.username}`)
-                .setThumbnail(memberCheck.user.displayAvatarURL())
-                .addFields(
-                    { name: '🆔 ID', value: memberCheck.user.id, inline: true },
-                    { name: '📅 تاريخ الإنشاء', value: `<t:${Math.floor(memberCheck.user.createdTimestamp / 1000)}:D>`, inline: true },
-                    { name: '📥 تاريخ الانضمام', value: `<t:${Math.floor(memberCheck.joinedTimestamp / 1000)}:D>`, inline: true },
-                    { name: '🎭 أعلى رتبة', value: `${memberCheck.roles.highest}`, inline: true }
-                )
-                .setColor(0x00ff00);
-            message.channel.send({ embeds: [checkEmbed] });
-            break;
-
-        case 'تايم':
-            message.channel.send(`⏰ الوقت الحالي: ${new Date().toLocaleTimeString('ar-SA')}`);
-            break;
-
-        case 'طقس':
-            if (!args[0]) return message.reply('❌ اكتب اسم مدينة، مثال: -طقس الرياض');
-            try {
-                const weatherRes = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${args[0]}&appid=YOUR_OPENWEATHER_API_KEY&lang=ar&units=metric`);
-                const w = weatherRes.data;
-                const weatherEmbed = new EmbedBuilder()
-                    .setTitle(`🌤️ الطقس في ${w.name}`)
-                    .setDescription(`${w.weather[0].description}`)
-                    .addFields(
-                        { name: '🌡️ الحرارة', value: `${w.main.temp}°C`, inline: true },
-                        { name: '💧 الرطوبة', value: `${w.main.humidity}%`, inline: true }
-                    )
-                    .setColor(0x00ff00);
-                message.channel.send({ embeds: [weatherEmbed] });
-            } catch (e) { message.reply('❌ مدينة غير صالحة أو خطأ في API.'); }
-            break;
-
-        case 'يوزر':
-            const userInfo = message.mentions.users.first() || message.author;
-            const userEmbed = new EmbedBuilder()
-                .setTitle(`👤 معلومات ${userInfo.username}`)
-                .setThumbnail(userInfo.displayAvatarURL())
-                .addFields(
-                    { name: 'ID', value: userInfo.id, inline: true },
-                    { name: 'تاريخ الإنشاء', value: `<t:${Math.floor(userInfo.createdTimestamp / 1000)}:D>`, inline: true }
-                )
-                .setColor(0x00ff00);
-            message.channel.send({ embeds: [userEmbed] });
-            break;
-
-        case 'رتبة':
-            const rankMember = message.mentions.members.first() || message.member;
-            const roles = rankMember.roles.cache.filter(r => r.name !== '@everyone').map(r => r.name).join(', ') || 'لا يوجد';
-            message.channel.send(`🎭 رتب ${rankMember.user.username}: ${roles}`);
-            break;
-
-        case 'احصائيات':
-            const statsEmbed = new EmbedBuilder()
-                .setTitle('📈 إحصائيات السيرفر')
-                .addFields(
-                    { name: 'الأعضاء', value: `${message.guild.memberCount}`, inline: true },
-                    { name: 'الرومات النصية', value: `${message.guild.channels.cache.filter(c => c.type === 0).size}`, inline: true },
-                    { name: 'الرومات الصوتية', value: `${message.guild.channels.cache.filter(c => c.type === 2).size}`, inline: true }
-                )
-                .setColor(0x00ff00);
-            message.channel.send({ embeds: [statsEmbed] });
-            break;
-
-        // ============ أوامر إشرافية واستفزازية ============
-        case 'كتم':
-        case 'اص':
-        case 'ميوت':
-            const muteMember = message.mentions.members.first();
-            if (!muteMember) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, muteMember)) return message.reply('❌ ما تقدر عليه');
-            const muteDuration = args[1] ? ms(args[1]) : 0;
-            await muteMember.timeout(muteDuration || null, 'كتم');
-            message.reply(`✅ ${muteMember.user.username} انكتم${muteDuration ? ' لمدة ' + args[1] : ' للأبد'} .`);
-            break;
-
-        case 'تكلم':
-        case 'انبح':
-            const unmuteMember = message.mentions.members.first();
-            if (!unmuteMember) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, unmuteMember)) return message.reply('❌ ما تقدر عليه');
-            await unmuteMember.timeout(null);
-            message.reply(`🔊 ${unmuteMember.user.username} صار يقدر يتكلم.`);
-            break;
-
-        case 'طرد':
-        case 'تفو':
-            const kickMember = message.mentions.members.first();
-            if (!kickMember) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, kickMember)) return message.reply('❌ ما تقدر تطرده');
-            await kickMember.kick('طرد بواسطة البوت');
-            message.reply(`👢 ${kickMember.user.username} طار من السيرفر`);
-            break;
-
-        case 'باند':
-        case 'حظر':
-            const banMember = message.mentions.members.first();
-            if (!banMember) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, banMember)) return message.reply('❌ ما تقدر تحظره');
-            await banMember.ban({ reason: 'حظر بواسطة البوت' });
-            message.reply(`🔨 ${banMember.user.username} انحظر`);
-            break;
-
-        case 'سجن':
-            const jailMember = message.mentions.members.first();
-            if (!jailMember) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, jailMember)) return message.reply('❌ ما تقدر تسجنه');
-            const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
-            if (!jailRole) return message.reply('دور السجن مو موجود.');
-            // حفظ الرتب
-            const memberRoles = jailMember.roles.cache.filter(r => r.name !== '@everyone').map(r => r.id);
-            jailData.set(`${message.guild.id}-${jailMember.id}`, memberRoles);
-            await jailMember.roles.set([jailRole]);
-            message.reply(`🔒 ${jailMember.user.username} انسجن`);
-            break;
-
-        case 'فك_سجن':
-            const unjailMember = message.mentions.members.first();
-            if (!unjailMember) return message.reply('منشن شخص.');
-            const savedRoles = jailData.get(`${message.guild.id}-${unjailMember.id}`);
-            if (!savedRoles) return message.reply('هذا مو مسجون.');
-            const jailRole2 = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
-            await unjailMember.roles.remove(jailRole2);
-            await unjailMember.roles.add(savedRoles);
-            jailData.delete(`${message.guild.id}-${unjailMember.id}`);
-            message.reply(`🔓 ${unjailMember.user.username} خرج من السجن ورجعت رتبه`);
-            break;
-
-        case 'مسح':
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply('❌ ما عندك صلاحية');
-            const amount = parseInt(args[0]);
-            if (!amount || amount < 1 || amount > 100) return message.reply('اكتب رقم بين 1 و 100');
-            await message.channel.bulkDelete(amount, true);
-            message.channel.send(`✅ تم مسح ${amount} رسالة`).then(m => setTimeout(() => m.delete(), 3000));
-            break;
-
-        case 'لوك':
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ ما عندك صلاحية');
-            await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-            message.reply('🔒 الروم مقفول.');
-            break;
-
-        case 'انلوك':
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ ما عندك صلاحية');
-            await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
-            message.reply('🔓 الروم مفتوح.');
-            break;
-
-        case 'تحذير':
-            const warnMember = message.mentions.members.first();
-            if (!warnMember) return message.reply('منشن شخص.');
-            message.channel.send(`⚠️ ${warnMember.user.username} تم تحذيرك!`);
-            break;
-
-        // أوامر استفزازية إضافية
-        case 'انقلع':
-            const kickMe = message.mentions.members.first();
-            if (!kickMe) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, kickMe)) return message.reply('❌ ما تقدر');
-            await kickMe.timeout(60000, 'انقلع دقيقة');
-            message.reply(`💨 ${kickMe.user.username} انقلع دقيقة`);
-            break;
-
-        case 'خرس':
-            const silence = message.mentions.members.first();
-            if (!silence) return message.reply('منشن شخص.');
-            if (!hasPermission(message.member, silence)) return message.reply('❌ ما تقدر');
-            await silence.timeout(300000, 'خرس 5 دقائق');
-            message.reply(`🤫 ${silence.user.username} خرس 5 دقايق`);
-            break;
-
-        case 'سحب_عليه':
-            const ignore = message.mentions.members.first();
-            if (!ignore) return message.reply('منشن شخص.');
-            // يسجن بسرعة (نفس السجن لكن بدون حفظ)
+            message.channel.send({ embeds: [embed] });
+        } catch (e) { message.reply('❌ مدينة غير صالحة'); }
+    }
+    else if (command === 'يوزر') {
+        const user = message.mentions.users.first() || message.author;
+        const embed = new EmbedBuilder()
+            .setTitle(`👤 ${user.username}`)
+            .setThumbnail(user.displayAvatarURL())
+            .addFields({ name: 'ID', value: user.id, inline: true }, { name: 'تاريخ الإنشاء', value: `<t:${Math.floor(user.createdTimestamp/1000)}:D>`, inline: true })
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
+    }
+    else if (command === 'رتبة') {
+        const member = message.mentions.members.first() || message.member;
+        const roles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r.name).join(', ') || 'لا يوجد';
+        message.channel.send(`🎭 ${member.user.username}: ${roles}`);
+    }
+    else if (command === 'احصائيات') {
+        const embed = new EmbedBuilder()
+            .setTitle('📈 إحصائيات السيرفر')
+            .addFields(
+                { name: 'الأعضاء', value: `${message.guild.memberCount}`, inline: true },
+                { name: 'الرومات النصية', value: `${message.guild.channels.cache.filter(c => c.type === 0).size}`, inline: true },
+                { name: 'الرومات الصوتية', value: `${message.guild.channels.cache.filter(c => c.type === 2).size}`, inline: true }
+            )
+            .setColor(0x00ff00);
+        message.channel.send({ embeds: [embed] });
+    }
+    // ============ إشراف ============
+    else if (['كتم', 'اص', 'ميوت'].includes(command)) {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        if (!hasPermission(message.member, member)) return message.reply('❌ ما تقدر عليه');
+        const duration = args[1] ? ms(args[1]) : 0;
+        await member.timeout(duration || null, 'كتم');
+        message.channel.send(`✅ ${member.user} انكتم${duration ? ' لمدة '+args[1] : ' للأبد'}`);
+        sendDM(member.user, `⚠️ تم كتمك في سيرفر ${message.guild.name}`);
+    }
+    else if (['تكلم', 'انبح'].includes(command)) {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        if (!hasPermission(message.member, member)) return message.reply('❌ ما تقدر عليه');
+        await member.timeout(null);
+        message.channel.send(`🔊 ${member.user} صار يقدر يتكلم`);
+    }
+    else if (['طرد', 'تفو'].includes(command)) {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        if (!hasPermission(message.member, member)) return message.reply('❌ ما تقدر');
+        await member.kick('طرد');
+        message.channel.send(`👢 ${member.user} طار من السيرفر`);
+    }
+    else if (['باند', 'حظر'].includes(command)) {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        if (!hasPermission(message.member, member)) return message.reply('❌ ما تقدر');
+        await member.ban({ reason: 'حظر' });
+        message.channel.send(`🔨 ${member.user} انحظر`);
+    }
+    else if (command === 'سجن') {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        if (!hasPermission(message.member, member)) return message.reply('❌ ما تقدر');
+        const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
+        if (!jailRole) return message.reply('دور السجن مو موجود');
+        const memberRoles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r.id);
+        await db.set(`jail_${message.guild.id}_${member.id}`, memberRoles);
+        await member.roles.set([jailRole]);
+        message.channel.send(`🔒 ${member.user} انسجن`);
+    }
+    else if (command === 'فك_سجن') {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        const saved = await db.get(`jail_${message.guild.id}_${member.id}`);
+        if (!saved) return message.reply('مو مسجون');
+        const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
+        await member.roles.remove(jailRole);
+        await member.roles.add(saved);
+        await db.delete(`jail_${message.guild.id}_${member.id}`);
+        message.channel.send(`🔓 ${member.user} خرج من السجن ورجعت رتبه`);
+    }
+    else if (command === 'مسح') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply('❌ ما عندك صلاحية');
+        const amount = parseInt(args[0]);
+        if (!amount || amount < 1 || amount > 100) return message.reply('اكتب رقم بين 1 و 100');
+        await message.channel.bulkDelete(amount, true);
+        message.channel.send(`✅ تم مسح ${amount} رسالة`).then(m => setTimeout(() => m.delete(), 3000));
+    }
+    else if (command === 'لوك') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ ما عندك صلاحية');
+        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+        message.reply('🔒 الروم مقفول');
+    }
+    else if (command === 'انلوك') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ ما عندك صلاحية');
+        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+        message.reply('🔓 الروم مفتوح');
+    }
+    else if (command === 'تحذير') {
+        const member = message.mentions.members.first();
+        if (!member) return message.reply('منشن شخص.');
+        if (!hasPermission(message.member, member)) return message.reply('❌ ما تقدر');
+        message.channel.send(`⚠️ ${member.user} تم تحذيرك!`);
+        sendDM(member.user, `⚠️ لقد تلقيت تحذيراً في سيرفر ${message.guild.name}`);
+    }
+    // ============ أوامر استفزازية ============
+    else if (['انقلع', 'اخرس', 'خرس', 'سحب_عليه', 'انفجر', 'امص', 'كمخ', 'صفعة', 'بصق'].includes(command)) {
+        const target = message.mentions.members.first();
+        if (!target) return message.reply('منشن شخص.');
+        if (['انقلع', 'اخرس', 'خرس'].includes(command)) {
+            if (!hasPermission(message.member, target)) return message.reply('❌ ما تقدر');
+            await target.timeout(60000, 'عقوبة استفزازية');
+            message.channel.send(`💨 ${target.user} ${command === 'انقلع' ? 'انقلع' : 'خرس'} دقيقة`);
+        } else if (command === 'سحب_عليه') {
+            if (!hasPermission(message.member, target)) return message.reply('❌ ما تقدر');
             const jRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
-            if (!jRole) return message.reply('دور السجن مو موجود.');
-            await ignore.roles.add(jRole);
-            message.reply(`🚔 ${ignore.user.username} انسحب عليه وسجن`);
-            break;
-
-        case 'انفجر':
+            if (!jRole) return message.reply('دور السجن مو موجود');
+            await target.roles.add(jRole);
+            message.channel.send(`🚔 ${target.user} انسحب عليه وسجن`);
+        } else if (command === 'انفجر') {
             if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply('❌ ما عندك صلاحية');
-            const explodeMember = message.mentions.members.first();
-            if (!explodeMember) return message.reply('منشن شخص.');
             const msgs = await message.channel.messages.fetch({ limit: 100 });
-            const userMsgs = msgs.filter(m => m.author.id === explodeMember.id);
+            const userMsgs = msgs.filter(m => m.author.id === target.id);
             await message.channel.bulkDelete(userMsgs, true);
-            message.reply(`💥 رسائل ${explodeMember.user.username} انفجرت`);
-            break;
-
-        case 'امص':
-        case 'كمخ':
-        case 'صفعة':
-        case 'بصق':
-        case 'اخرس':
-            const target = message.mentions.members.first();
-            if (!target) return message.reply('منشن شخص.');
-            message.channel.send(`${target.user.username} تعال ${command} مني 😂`);
-            break;
-
-        // ============ ألعاب ============
-        case 'حجرة':
-        case 'ورقة':
-        case 'مقص':
-            const rps = ['حجرة', 'ورقة', 'مقص'];
-            const botRPS = rps[Math.floor(Math.random() * rps.length)];
-            message.reply(`✊✋✌️ البوت اختار: **${botRPS}**`);
-            break;
-
-        case 'تخمين':
-            const guess = Math.floor(Math.random() * 10) + 1;
-            const userGuess = parseInt(args[0]);
-            if (!userGuess) return message.reply('خمن رقم بين 1 و 10');
-            if (userGuess === guess) message.reply('✅ صح عليك!');
-            else message.reply(`❌ غلط! الرقم كان ${guess}`);
-            break;
-
-        case 'عملة':
-            const coin = Math.random() < 0.5 ? 'ملك' : 'كتابة';
-            message.reply(`🪙 ${coin}`);
-            break;
-
-        case 'نرد':
-            const dice = Math.floor(Math.random() * 6) + 1;
-            message.reply(`🎲 ${dice}`);
-            break;
-
-        case 'اكس_او':
-            message.reply('🕹️ اكس او: قريباً');
-            break;
-
-        case 'سرعة_كتابة':
-            message.reply('⌨️ اكتب: "البوت الأسطوري" بأسرع وقت. جاري التطوير');
-            break;
-
-        case 'شنق':
-            message.reply('🇸🇦 شنق: جاري التطوير');
-            break;
-
-        case 'تحدي':
-            const challenge = message.mentions.members.first();
-            if (!challenge) return message.reply('منشن شخص للتحدي');
-            message.channel.send(`${challenge.user.username} تم تحديك في معركة! ⚔️`);
-            break;
-
-        // ============ إسلامية ============
-        case 'قرآن':
-            message.reply('📖 استمع للقرآن: https://quran.com');
-            break;
-
-        case 'حديث':
-            message.reply('📜 حديث: "من كان يؤمن بالله واليوم الآخر فليقل خيراً أو ليصمت"');
-            break;
-
-        case 'اذكار':
-            message.reply('📿 سبحان الله وبحمده، سبحان الله العظيم');
-            break;
-
-        case 'تسبيح':
-            message.reply('📿 سبحان الله، الحمدلله، الله أكبر');
-            break;
-
-        case 'صلاة':
-            message.reply('🕌 حان الآن وقت الصلاة (للتذكير)');
-            break;
-
-        // ============ اقتصاد وهمي ============
-        case 'فلوسي':
-            message.reply('💰 رصيدك: 500 ريال (وهمي)');
-            break;
-
-        case 'راتب':
-            message.reply('💸 استلمت راتبك اليومي: 100 ريال');
-            break;
-
-        case 'تحويل':
-            const transferUser = message.mentions.users.first();
-            const amountTrans = parseInt(args[1]);
-            if (!transferUser || !amountTrans) return message.reply('استخدم: -تحويل @شخص المبلغ');
-            message.reply(`💵 حولت ${amountTrans} ريال إلى ${transferUser.username}`);
-            break;
-
-        case 'متجر':
-            message.reply('🛒 المتجر: 1. كلمة مرور (1000) 2. رتبة مميزة (5000)');
-            break;
-
-        case 'هدية':
-            const giftUser = message.mentions.users.first();
-            if (!giftUser) return message.reply('منشن شخص تهديه');
-            message.reply(`🎁 أهديت ${giftUser.username} 50 ريال`);
-            break;
-
-        // ============ تذاكر ============
-        case 'تذكرة':
-            message.reply('🎫 نظام التذاكر: اختر نوع التذكرة:\n- الدعم الفني\n- الإبلاغ عن عضو\n- الإبلاغ عن إداري\n(سيتم إنشاء روم خاص)');
-            // هنا يمكن تطوير نظام تذاكر بسيط بإنشاء روم خاص يدويًا (سنختصر)
-            break;
-
-        case 'مساعدة':
-            message.reply('📞 للمساعدة العاجلة تواصل مع الإدارة');
-            break;
-
-        case 'بلاغ':
-            message.reply('🚨 تم إرسال بلاغك للإدارة');
-            break;
-
-        case 'تقرير':
-            message.reply('📊 تقريرك: لا توجد بيانات بعد');
-            break;
-
-        case 'قريب':
-            message.reply('⏳ الخدمة قيد الإنشاء');
-            break;
-
-        default:
-            message.reply('❌ أمر غير معروف. اكتب `-اوامر`');
+            message.channel.send(`💥 رسائل ${target.user} انفجرت`);
+        } else {
+            message.channel.send(`${target.user} تعال ${command} مني 😂`);
+        }
+    }
+    // ============ ألعاب ============
+    else if (['حجرة', 'ورقة', 'مقص'].includes(command)) {
+        const choices = ['حجرة', 'ورقة', 'مقص'];
+        const botChoice = choices[Math.floor(Math.random() * choices.length)];
+        message.reply(`✊✋✌️ البوت اختار: **${botChoice}**`);
+    }
+    else if (command === 'تخمين') {
+        const guess = Math.floor(Math.random() * 10) + 1;
+        const userGuess = parseInt(args[0]);
+        if (!userGuess) return message.reply('خمن رقم بين 1 و 10');
+        message.reply(userGuess === guess ? '✅ صح عليك!' : `❌ غلط! الرقم كان ${guess}`);
+    }
+    else if (command === 'عملة') {
+        message.reply(`🪙 ${Math.random() < 0.5 ? 'ملك' : 'كتابة'}`);
+    }
+    else if (command === 'نرد') {
+        message.reply(`🎲 ${Math.floor(Math.random() * 6) + 1}`);
+    }
+    else if (['اكس_او', 'سرعة_كتابة', 'شنق', 'تحدي'].includes(command)) {
+        message.reply('⏳ قريباً');
+    }
+    // ============ إسلامية ============
+    else if (command === 'قرآن') message.reply('📖 https://quran.com');
+    else if (command === 'حديث') message.reply('📜 "من كان يؤمن بالله واليوم الآخر فليقل خيراً أو ليصمت"');
+    else if (command === 'اذكار') message.reply('📿 سبحان الله وبحمده، سبحان الله العظيم');
+    else if (command === 'تسبيح') message.reply('📿 سبحان الله، الحمدلله، الله أكبر');
+    else if (command === 'صلاة') message.reply('🕌 حان الآن وقت الصلاة');
+    // ============ اقتصاد ============
+    else if (command === 'فلوسي') message.reply('💰 رصيدك: 500 ريال (وهمي)');
+    else if (command === 'راتب') message.reply('💸 استلمت راتبك اليومي: 100 ريال');
+    else if (command === 'تحويل') {
+        const user = message.mentions.users.first();
+        const amount = parseInt(args[1]);
+        if (!user || !amount) return message.reply('-تحويل @شخص المبلغ');
+        message.reply(`💵 حولت ${amount} ريال إلى ${user.username}`);
+    }
+    else if (command === 'متجر') message.reply('🛒 المتجر: 1. كلمة مرور (1000) 2. رتبة مميزة (5000)');
+    else if (command === 'هدية') {
+        const user = message.mentions.users.first();
+        if (!user) return message.reply('منشن شخص تهديه');
+        message.reply(`🎁 أهديت ${user.username} 50 ريال`);
+    }
+    // ============ تذاكر (سيُفتح عبر الزر) ============
+    else if (command === 'تذكرة') {
+        const embed = new EmbedBuilder()
+            .setTitle('🎫 نظام التذاكر')
+            .setDescription('اختر نوع التذكرة:')
+            .setColor(0x00ff00);
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder().setCustomId('ticket_support').setLabel('الدعم الفني').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('ticket_report_member').setLabel('الإبلاغ عن عضو').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('ticket_report_admin').setLabel('الإبلاغ عن إداري').setStyle(ButtonStyle.Secondary)
+            );
+        message.channel.send({ embeds: [embed], components: [row] });
     }
 });
 
-// تشغيل البوت
+// ============ التفاعلات (الأزرار والقوائم) ============
+client.on('interactionCreate', async interaction => {
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === 'help_menu') {
+            const value = interaction.values[0];
+            let embed;
+            switch (value) {
+                case 'moderation':
+                    embed = new EmbedBuilder().setTitle('🛡️ الإشراف').setDescription('كتم, اص, تكلم, انبح, طرد, تفو, باند, حظر, سجن, فك_سجن, مسح, لوك, انلوك, تحذير').setColor(0x00ff00);
+                    break;
+                case 'fun':
+                    embed = new EmbedBuilder().setTitle('😈 الاستفزاز').setDescription('انقلع, خرس, اخرس, سحب_عليه, انفجر, امص, كمخ, صفعة, بصق').setColor(0x00ff00);
+                    break;
+                case 'games':
+                    embed = new EmbedBuilder().setTitle('🎮 الألعاب').setDescription('حجرة, ورقة, مقص, تخمين, عملة, نرد, اكس_او, سرعة_كتابة, شنق, تحدي').setColor(0x00ff00);
+                    break;
+                case 'islamic':
+                    embed = new EmbedBuilder().setTitle('🕌 الإسلامية').setDescription('قرآن, حديث, اذكار, تسبيح, صلاة').setColor(0x00ff00);
+                    break;
+                case 'general':
+                    embed = new EmbedBuilder().setTitle('👤 العامة').setDescription('اوامر, بينج, سيرفر, اواتار, تحقق, تايم, طقس, يوزر, رتبة, احصائيات').setColor(0x00ff00);
+                    break;
+                case 'economy':
+                    embed = new EmbedBuilder().setTitle('💰 الاقتصاد').setDescription('فلوسي, راتب, تحويل, متجر, هدية').setColor(0x00ff00);
+                    break;
+                case 'tickets':
+                    embed = new EmbedBuilder().setTitle('🎫 التذاكر').setDescription('تذكرة (لفتح قائمة التذاكر), مساعدة, بلاغ, تقرير, قريب').setColor(0x00ff00);
+                    break;
+            }
+            await interaction.update({ embeds: [embed], components: [interaction.message.components[0]] });
+        }
+    } else if (interaction.isButton()) {
+        if (interaction.customId.startsWith('ticket_')) {
+            const type = interaction.customId.replace('ticket_', '');
+            const guild = interaction.guild;
+            const member = interaction.member;
+
+            // إنشاء روم خاص
+            const channel = await guild.channels.create({
+                name: `ticket-${member.user.username}-${type}`,
+                type: ChannelType.GuildText,
+                permissionOverwrites: [
+                    { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: member.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    // هنا يمكن إضافة رتب الدعم (اختصرنا للإدارة)
+                    { id: guild.ownerId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                ]
+            });
+            const embed = new EmbedBuilder()
+                .setTitle(`🎫 تذكرة ${type === 'support' ? 'دعم فني' : type === 'report_member' ? 'إبلاغ عن عضو' : 'إبلاغ عن إداري'}`)
+                .setDescription(`مرحباً ${member.user}، فريق الدعم سيأتي قريباً.`)
+                .setColor(0x00ff00);
+            channel.send({ embeds: [embed] });
+            await interaction.reply({ content: `✅ تم إنشاء تذكرتك في ${channel}`, ephemeral: true });
+        }
+    }
+});
+
 client.login(process.env.TOKEN);
