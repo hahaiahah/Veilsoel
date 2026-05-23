@@ -1,13 +1,7 @@
-// ============================================
-// بوت whitehat9995# - الإصدار الأسطوري
-// ============================================
-
-const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType, ActivityType } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
 const ms = require('ms');
-const { QuickDB } = require('quick.db');
-const db = new QuickDB();
 
 const client = new Client({
     intents: [
@@ -35,6 +29,9 @@ const roleHierarchy = [
     "Helper", "بكّمي", "Member", "سجن", "مسجون"
 ];
 
+// تخزين رتب السجن في الذاكرة
+const jailData = new Map();
+
 function getHighestRole(member) {
     return member.roles.cache
         .filter(r => roleHierarchy.includes(r.name))
@@ -55,7 +52,7 @@ function hasPermission(member, target) {
 // ============ البوت جاهز ============
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} يعمل`);
-    client.user.setActivity("-اوامر | نظام متكامل", { type: 3 });
+    client.user.setActivity("-اوامر | نظام متكامل", { type: ActivityType.Watching });
 
     // مهمة الأخبار كل ساعتين
     cron.schedule('0 */2 * * *', async () => {
@@ -104,20 +101,17 @@ client.on('guildMemberRemove', member => {
     channel.send({ embeds: [embed] });
 });
 
-// ============ معالج الأوامر العادية ============
+// ============ معالج الأوامر ============
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // دالة إرسال رسالة تحذير بالخاص
     const sendDM = async (user, content) => {
-        try {
-            await user.send(content);
-        } catch (e) { /* لا يمكن إرسال خاص */ }
+        try { await user.send(content); } catch (e) {}
     };
 
-    // ============ قائمة الأوامر التفاعلية ============
     if (command === 'اوامر' || command === 'help') {
         const row = new ActionRowBuilder()
             .addComponents(
@@ -134,18 +128,16 @@ client.on('messageCreate', async message => {
                         { label: '🎫 التذاكر', value: 'tickets' }
                     ])
             );
-
         const embed = new EmbedBuilder()
             .setTitle('📜 قائمة الأوامر')
             .setDescription('**اختر القسم من القائمة أدناه**')
             .setColor(0x00ff00)
             .setFooter({ text: 'whitehat9995#' });
-
         message.channel.send({ embeds: [embed], components: [row] });
         return;
     }
 
-    // ============ أوامر عامة ============
+    // أوامر عامة
     if (command === 'بينج') {
         const pingMsg = await message.channel.send('⏳ جاري الحساب...');
         const ping = pingMsg.createdTimestamp - message.createdTimestamp;
@@ -228,7 +220,7 @@ client.on('messageCreate', async message => {
             .setColor(0x00ff00);
         message.channel.send({ embeds: [embed] });
     }
-    // ============ إشراف ============
+    // إشراف
     else if (['كتم', 'اص', 'ميوت'].includes(command)) {
         const member = message.mentions.members.first();
         if (!member) return message.reply('منشن شخص.');
@@ -266,19 +258,19 @@ client.on('messageCreate', async message => {
         const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
         if (!jailRole) return message.reply('دور السجن مو موجود');
         const memberRoles = member.roles.cache.filter(r => r.name !== '@everyone').map(r => r.id);
-        await db.set(`jail_${message.guild.id}_${member.id}`, memberRoles);
+        jailData.set(`${message.guild.id}-${member.id}`, memberRoles);
         await member.roles.set([jailRole]);
         message.channel.send(`🔒 ${member.user} انسجن`);
     }
     else if (command === 'فك_سجن') {
         const member = message.mentions.members.first();
         if (!member) return message.reply('منشن شخص.');
-        const saved = await db.get(`jail_${message.guild.id}_${member.id}`);
+        const saved = jailData.get(`${message.guild.id}-${member.id}`);
         if (!saved) return message.reply('مو مسجون');
         const jailRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
         await member.roles.remove(jailRole);
         await member.roles.add(saved);
-        await db.delete(`jail_${message.guild.id}_${member.id}`);
+        jailData.delete(`${message.guild.id}-${member.id}`);
         message.channel.send(`🔓 ${member.user} خرج من السجن ورجعت رتبه`);
     }
     else if (command === 'مسح') {
@@ -305,14 +297,14 @@ client.on('messageCreate', async message => {
         message.channel.send(`⚠️ ${member.user} تم تحذيرك!`);
         sendDM(member.user, `⚠️ لقد تلقيت تحذيراً في سيرفر ${message.guild.name}`);
     }
-    // ============ أوامر استفزازية ============
+    // استفزاز
     else if (['انقلع', 'اخرس', 'خرس', 'سحب_عليه', 'انفجر', 'امص', 'كمخ', 'صفعة', 'بصق'].includes(command)) {
         const target = message.mentions.members.first();
         if (!target) return message.reply('منشن شخص.');
         if (['انقلع', 'اخرس', 'خرس'].includes(command)) {
             if (!hasPermission(message.member, target)) return message.reply('❌ ما تقدر');
             await target.timeout(60000, 'عقوبة استفزازية');
-            message.channel.send(`💨 ${target.user} ${command === 'انقلع' ? 'انقلع' : 'خرس'} دقيقة`);
+            message.channel.send(`💨 ${target.user} انعاقب دقيقة`);
         } else if (command === 'سحب_عليه') {
             if (!hasPermission(message.member, target)) return message.reply('❌ ما تقدر');
             const jRole = message.guild.roles.cache.find(r => r.name === JAIL_ROLE_NAME);
@@ -329,7 +321,7 @@ client.on('messageCreate', async message => {
             message.channel.send(`${target.user} تعال ${command} مني 😂`);
         }
     }
-    // ============ ألعاب ============
+    // ألعاب
     else if (['حجرة', 'ورقة', 'مقص'].includes(command)) {
         const choices = ['حجرة', 'ورقة', 'مقص'];
         const botChoice = choices[Math.floor(Math.random() * choices.length)];
@@ -350,13 +342,13 @@ client.on('messageCreate', async message => {
     else if (['اكس_او', 'سرعة_كتابة', 'شنق', 'تحدي'].includes(command)) {
         message.reply('⏳ قريباً');
     }
-    // ============ إسلامية ============
+    // إسلامية
     else if (command === 'قرآن') message.reply('📖 https://quran.com');
     else if (command === 'حديث') message.reply('📜 "من كان يؤمن بالله واليوم الآخر فليقل خيراً أو ليصمت"');
     else if (command === 'اذكار') message.reply('📿 سبحان الله وبحمده، سبحان الله العظيم');
     else if (command === 'تسبيح') message.reply('📿 سبحان الله، الحمدلله، الله أكبر');
     else if (command === 'صلاة') message.reply('🕌 حان الآن وقت الصلاة');
-    // ============ اقتصاد ============
+    // اقتصاد
     else if (command === 'فلوسي') message.reply('💰 رصيدك: 500 ريال (وهمي)');
     else if (command === 'راتب') message.reply('💸 استلمت راتبك اليومي: 100 ريال');
     else if (command === 'تحويل') {
@@ -371,7 +363,6 @@ client.on('messageCreate', async message => {
         if (!user) return message.reply('منشن شخص تهديه');
         message.reply(`🎁 أهديت ${user.username} 50 ريال`);
     }
-    // ============ تذاكر (سيُفتح عبر الزر) ============
     else if (command === 'تذكرة') {
         const embed = new EmbedBuilder()
             .setTitle('🎫 نظام التذاكر')
@@ -387,7 +378,7 @@ client.on('messageCreate', async message => {
     }
 });
 
-// ============ التفاعلات (الأزرار والقوائم) ============
+// ============ التفاعلات ============
 client.on('interactionCreate', async interaction => {
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'help_menu') {
@@ -424,14 +415,12 @@ client.on('interactionCreate', async interaction => {
             const guild = interaction.guild;
             const member = interaction.member;
 
-            // إنشاء روم خاص
             const channel = await guild.channels.create({
                 name: `ticket-${member.user.username}-${type}`,
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
                     { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
                     { id: member.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    // هنا يمكن إضافة رتب الدعم (اختصرنا للإدارة)
                     { id: guild.ownerId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
                 ]
             });
@@ -445,4 +434,4 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN).catch(err => console.error('فشل الاتصال:', err));
