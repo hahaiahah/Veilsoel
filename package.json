@@ -1,0 +1,12 @@
+{
+  "name": "whitehat9995-bot",
+  "version": "1.0.0",
+  "description": "بوت حماية وتحقيق - whitehat9995#",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1"
+  }
+}
