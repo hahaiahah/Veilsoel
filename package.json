@@ -1,7 +1,7 @@
 {
   "name": "whitehat9995-bot-pro",
-  "version": "4.0.1",
-  "description": "بوت whitehat9995# الأسطوري",
+  "version": "5.0.0",
+  "description": "بوت whitehat9995# الأسطوري | كامل بالعربية",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
